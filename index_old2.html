@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spotify Rater - Dark Mode</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.css">
+  <style>
+    html, body {
+      background: #121212;
+      color: #f5f5f5;
+    }
+    .navbar, .card, .input, .button.is-primary {
+      background-color: #1f1f1f !important;
+      color: #f5f5f5 !important;
+    }
+    .navbar-burger span {
+      background-color: #f5f5f5 !important;
+    }
+    .card .card-image .image.is-square {
+      background: #2a2a2a;
+      object-fit: contain;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.is-active {
+      display: block;
+      animation: fadeIn 0.4s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity:0 }
+      to { opacity:1 }
+    }
+    .album-card {
+      transition: transform 0.2s;
+    }
+    .album-card:hover {
+      transform: translateY(-4px) scale(1.02);
+    }
+    #top .swiper-slide {
+      width: 150px !important;
+    }
+    input[type="number"]::-webkit-inner-spin-button, 
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+    .title, .subtitle, .navbar-item, .button, .input::placeholder {
+      color: #f5f5f5 !important;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <a class="navbar-item" href="#">🎵 Spotify Rater</a>
+      <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navMenu">
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </a>
+    </div>
+    <div id="navMenu" class="navbar-menu">
+      <div class="navbar-start">
+        <a class="navbar-item is-tab is-active" data-tab="all">All Albums</a>
+        <a class="navbar-item is-tab" data-tab="top">Top Rated</a>
+      </div>
+      <div class="navbar-end">
+        <div class="navbar-item">
+          <div class="field has-addons">
+            <div class="control">
+              <input id="urlInput" class="input" type="text" placeholder="Spotify URL">
+            </div>
+            <div class="control">
+              <button id="addBtn" class="button is-primary">Add</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+  <section class="section">
+    <div id="all" class="tab-content is-active">
+      <div class="columns is-multiline" id="gridAll"></div>
+    </div>
+    <div id="top" class="tab-content">
+      <div class="swiper-container">
+        <div class="swiper-wrapper" id="gridTop"></div>
+        <div class="swiper-pagination"></div>
+        <div class="swiper-button-prev"></div>
+        <div class="swiper-button-next"></div>
+      </div>
+    </div>
+  </section>
+  <script src="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.js"></script>
+  <script>
+    const storageKey = 'spotifyRatings2';
+    let data = JSON.parse(localStorage.getItem(storageKey) || '[]');
+
+    document.querySelectorAll('.is-tab').forEach(el => el.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('is-active'));
+      document.getElementById(el.dataset.tab).classList.add('is-active');
+      document.querySelectorAll('.is-tab').forEach(t=>t.classList.remove('is-active'));
+      el.classList.add('is-active');
+      if(el.dataset.tab==='top') initSwiper();
+    }));
+
+    document.querySelector('.navbar-burger').addEventListener('click', () => {
+      document.getElementById('navMenu').classList.toggle('is-active');
+    });
+
+    document.getElementById('addBtn').addEventListener('click', async ()=>{
+      const url = document.getElementById('urlInput').value.trim();
+      const m = url.match(/open\.spotify\.com\/(album|track)\/([A-Za-z0-9]+)/);
+      if(!m) return alert('Invalid URL');
+      const [_, type, id] = m;
+      if(data.find(x=>x.id===id)) return alert('Already added');
+      try{
+        const meta = await fetch(`https://open.spotify.com/oembed?url=https://open.spotify.com/${type}/${id}`).then(r=>r.json());
+        data.push({id,type,...meta,rating:0});
+        localStorage.setItem(storageKey,JSON.stringify(data));
+        render();
+      }catch{alert('Fetch error');}
+    });
+
+    function render(){
+      const gridAll = document.getElementById('gridAll'); gridAll.innerHTML='';
+      data.forEach(item=>{
+        const col = document.createElement('div'); col.className='column is-3';
+        col.innerHTML = `<div class="card album-card">
+          <div class="card-image"><figure class="image is-square"><img src="${item.thumbnail_url}" alt="${item.title}" style="object-fit: contain;"></figure></div>
+          <div class="card-content">
+            <p class="title is-6">${item.title}</p>
+            <p class="subtitle is-7">${item.author_name}</p>
+            <div class="field"><input class="input" type="number" placeholder="Rating" value="${item.rating}" step="any"></div>
+          </div></div>`;
+        col.querySelector('input').addEventListener('change', e=>{
+          item.rating = parseFloat(e.target.value)||0;
+          localStorage.setItem(storageKey,JSON.stringify(data));
+          if(document.getElementById('top').classList.contains('is-active')) initSwiper();
+        });
+        gridAll.appendChild(col);
+      });
+    }
+
+    function initSwiper(){
+      const wrapper = document.getElementById('gridTop'); wrapper.innerHTML='';
+      data.filter(i=>i.rating>0).sort((a,b)=>b.rating-a.rating).forEach(item=>{
+        const slide = document.createElement('div'); slide.className='swiper-slide';
+        slide.innerHTML = `<div class="card album-card">
+          <div class="card-image"><figure class="image is-square"><img src="${item.thumbnail_url}" alt="" style="object-fit: contain;"></figure></div>
+          <div class="card-content"><p class="title is-6">${item.title}</p><p class="subtitle is-7">${item.rating}</p></div>
+        </div>`;
+        wrapper.appendChild(slide);
+      });
+      new Swiper('.swiper-container',{slidesPerView:'auto',spaceBetween:16,loop:true,pagination:{el:'.swiper-pagination'},navigation:{nextEl:'.swiper-button-next',prevEl:'.swiper-button-prev'}});
+    }
+
+    render();
+    initSwiper();
+  </script>
+</body>
+</html>

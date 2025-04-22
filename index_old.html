@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spotify Album Rater</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <style>
+    /* Fade-in animation */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in {
+      animation: fadeIn 0.5s ease-in-out;
+    }
+    /* Hide number input spinners */
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col">
+  <header class="bg-gray-800 py-6 shadow-md">
+    <div class="container mx-auto px-4">
+      <h1 class="text-3xl font-bold text-center">Spotify Album Rater</h1>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="bg-gray-800 shadow-inner">
+    <div class="container mx-auto px-4 flex space-x-4">
+      <button id="btn-all" class="py-2 px-4 bg-gray-700 hover:bg-gray-600 rounded transition">All Albums/Tracks</button>
+      <button id="btn-top" class="py-2 px-4 bg-gray-800 hover:bg-gray-700 rounded transition">Top Rated</button>
+    </div>
+  </nav>
+
+  <main class="flex-1 container mx-auto px-4 py-8">
+    <!-- Add Form -->
+    <section class="mb-8">
+      <div class="flex gap-4">
+        <input id="album-url" type="text" placeholder="Paste Spotify album or track URL"
+               class="flex-1 bg-gray-800 placeholder-gray-500 text-gray-100 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400" />
+        <button id="add-button"
+                class="bg-green-500 hover:bg-green-600 text-gray-900 font-semibold px-6 rounded-lg transition">
+          Add
+        </button>
+      </div>
+    </section>
+
+    <!-- Pages -->
+    <section id="all-page" class="fade-in grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <!-- Albums will be injected here -->
+    </section>
+    <section id="top-page" class="hidden fade-in grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <!-- Top rated will be injected here -->
+    </section>
+  </main>
+
+  <footer class="bg-gray-800 py-4 text-center text-gray-500">
+    &copy; 2025 Spotify Album Rater
+  </footer>
+
+  <script>
+    const storageKey = 'spotifyRatings';
+    let data = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    let activePage = 'all';
+
+    function saveData() {
+      localStorage.setItem(storageKey, JSON.stringify(data));
+    }
+
+    async function fetchMetadata(id, type) {
+      const oembedUrl = `https://open.spotify.com/oembed?url=https://open.spotify.com/${type}/${id}`;
+      const resp = await fetch(oembedUrl);
+      return resp.json();
+    }
+
+    function createCard(item, isTop = false) {
+      const card = document.createElement('div');
+      card.className = 'bg-gray-800 rounded-lg overflow-hidden shadow hover:shadow-lg transition transform hover:scale-105 fade-in';
+
+      const img = document.createElement('img');
+      img.src = item.thumbnail_url;
+      img.alt = item.title;
+      // Full square image without cropping
+      img.className = 'w-full aspect-square object-contain bg-gray-700';
+
+      const body = document.createElement('div');
+      body.className = 'p-4';
+
+      const title = document.createElement('h3');
+      title.textContent = item.title;
+      title.className = 'text-lg font-bold';
+
+      const author = document.createElement('p');
+      author.textContent = item.author_name;
+      author.className = 'text-sm text-gray-400 mb-2';
+
+      const ratingWrapper = document.createElement('div');
+      if (!isTop) {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = 0;
+        input.max = 10;
+        input.value = item.rating;
+        input.className = 'bg-gray-700 text-gray-100 rounded px-2 py-1 w-20 focus:outline-none';
+        input.addEventListener('change', e => {
+          const val = parseFloat(e.target.value);
+          if (!isNaN(val)) {
+            item.rating = val;
+            saveData();
+            render();
+          }
+        });
+        ratingWrapper.appendChild(input);
+      } else {
+        const span = document.createElement('span');
+        span.textContent = `Rating: ${item.rating}`;
+        span.className = 'inline-block bg-green-600 text-gray-900 px-2 py-1 rounded';
+        ratingWrapper.appendChild(span);
+      }
+
+      body.append(title, author, ratingWrapper);
+      card.append(img, body);
+      return card;
+    }
+
+    function render() {
+      const allPage = document.getElementById('all-page');
+      const topPage = document.getElementById('top-page');
+      allPage.innerHTML = '';
+      topPage.innerHTML = '';
+
+      data.forEach(item => {
+        const card = createCard(item);
+        allPage.appendChild(card);
+      });
+
+      const sorted = [...data].filter(i => i.rating > 0).sort((a, b) => b.rating - a.rating);
+      sorted.forEach(item => {
+        const card = createCard(item, true);
+        topPage.appendChild(card);
+      });
+    }
+
+    function showPage(page) {
+      activePage = page;
+      document.getElementById('all-page').classList.toggle('hidden', page !== 'all');
+      document.getElementById('top-page').classList.toggle('hidden', page !== 'top');
+      ['btn-all', 'btn-top'].forEach(id => {
+        const btn = document.getElementById(id);
+        btn.classList.toggle('bg-gray-700', id === `btn-${page}`);
+        btn.classList.toggle('bg-gray-800', id !== `btn-${page}`);
+      });
+    }
+
+    document.getElementById('btn-all').addEventListener('click', () => showPage('all'));
+    document.getElementById('btn-top').addEventListener('click', () => showPage('top'));
+
+    document.getElementById('add-button').addEventListener('click', async () => {
+      const url = document.getElementById('album-url').value.trim();
+      if (!url) return;
+      const m = url.match(/open\.spotify\.com\/(album|track)\/([A-Za-z0-9]+)/);
+      if (!m) { alert('Invalid Spotify URL'); return; }
+      const [_, type, id] = m;
+      if (data.find(x => x.id === id)) { alert('Already added'); return; }
+      try {
+        const meta = await fetchMetadata(id, type);
+        const item = { id, type, title: meta.title, author_name: meta.author_name, thumbnail_url: meta.thumbnail_url, rating: 0 };
+        data.push(item);
+        saveData(); render();
+      } catch {
+        alert('Failed to fetch metadata');
+      }
+    });
+
+    // Initial render & default page
+    render();
+    showPage('all');
+  </script>
+</body>
+</html>
